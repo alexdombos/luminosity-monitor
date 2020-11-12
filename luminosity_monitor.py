@@ -1,16 +1,48 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+from datetime import timedelta
+from matplotlib.widgets import Button
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
+class ButtonClickProcessor:
+    def __init__(self, axes, label):
+        self.button = Button(ax = axes, label = label, color = 'red', hovercolor = 'red')
+        self.button.on_clicked(self.process)
+        self.activated = False
+        self.button_click_processors = None
+    def activate(self):
+        self.activated = True
+        self.button.color = 'green'
+        self.button.hovercolor = self.button.color
+        self.button.ax.set_facecolor(self.button.color)
+    def deactivate(self):
+        self.activated = False
+        self.button.color = 'red'
+        self.button.hovercolor = self.button.color
+        self.button.ax.set_facecolor(self.button.color)
+    def process(self, event):
+        for button_click_processor in self.button_click_processors:
+            button_click_processor.deactivate()
+        self.activate()
+        self.button.ax.figure.canvas.draw()
+
 def main():
+
+    earliest_time = datetime.now()
 
     fig, axes = plt.subplots()
     datetimes = []
     y_values = []
     line, = axes.plot_date(x = datetimes, y = y_values, color = 'blue', linestyle = 'solid', marker = 'None')
+
+    button_show_all_times = ButtonClickProcessor(axes = plt.axes([0.01, 0.01, 0.5, 0.1]), label = 'Show all times')
+    button_show_only_last_10_minutes = ButtonClickProcessor(axes = plt.axes([0.5, 0.01, 0.49, 0.1]), label = 'Show only last 10 minutes')
+    button_click_processors = (button_show_all_times, button_show_only_last_10_minutes)
+    button_show_all_times.button_click_processors = button_click_processors
+    button_show_only_last_10_minutes.button_click_processors = button_click_processors
 
     video_capture = cv2.VideoCapture(filename = 'http://redacted-rbpi-hostname:8080/stream/video.mjpeg')
 
@@ -29,7 +61,25 @@ def main():
         axes.relim()
         axes.autoscale(enable = True, axis = 'both', tight = None)
 
-        fig.tight_layout()
+        time_difference = now - earliest_time
+        time_window = 10 * 60
+        time_reset = 60 * 60
+        time_delta = timedelta(seconds = time_window)
+        if time_difference.total_seconds() > time_reset:
+            if button_show_only_last_10_minutes.activated is True:
+                axes.set_xlim(left = now - time_delta)
+            for button_click_processor in button_click_processors:
+                button_click_processor.deactivate()
+            earliest_time = now
+            datetimes = []
+            y_values = []
+        elif time_difference.total_seconds() > time_window:
+            if button_show_all_times.activated is True:
+                axes.set_xlim(left = datetimes[0] - 0.05 * (datetimes[-1] - datetimes[0]))
+            elif button_show_only_last_10_minutes.activated is True:
+                axes.set_xlim(left = now - time_delta)
+
+        fig.tight_layout(rect = [0, 0.1, 1, 1])
         plt.pause(interval = 0.0001)
 
         # Display the resulting frame
