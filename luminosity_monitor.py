@@ -5,6 +5,8 @@ from datetime import timedelta
 from matplotlib.widgets import Button
 import matplotlib.pyplot as plt
 import numpy as np
+import queue
+import threading
 import cv2
 
 class ButtonClickProcessor:
@@ -29,6 +31,30 @@ class ButtonClickProcessor:
         self.activate()
         self.button.ax.figure.canvas.draw()
 
+# bufferless VideoCapture
+class VideoCapture:
+    def __init__(self, name):
+        self.video_capture = cv2.VideoCapture(filename = name)
+        self.q = queue.Queue()
+        t = threading.Thread(target = self._reader)
+        t.daemon = True
+        t.start()
+    # read frames as soon as they are available, keeping only the most recent one
+    def _reader(self):
+        while True:
+            # capture frame-by-frame
+            frame_read_correctly, frame = self.video_capture.read()
+            if not frame_read_correctly:
+                break
+            if not self.q.empty():
+                try:
+                    self.q.get_nowait() # discard previous (unprocessed) frame
+                except queue.Empty:
+                    pass
+            self.q.put(item = frame)
+    def read(self):
+        return self.q.get()
+
 def main():
 
     earliest_time = datetime.now()
@@ -44,14 +70,12 @@ def main():
     button_show_all_times.button_click_processors = button_click_processors
     button_show_only_last_10_minutes.button_click_processors = button_click_processors
 
-    video_capture = cv2.VideoCapture(filename = 'http://redacted-rbpi-hostname:8080/stream/video.mjpeg')
+    video_capture = VideoCapture(name = 'http://redacted-rbpi-hostname:8080/stream/video.mjpeg')
 
     while True:
-        # Capture frame-by-frame
-        frame_read_correctly, frame = video_capture.read()
 
         # Our operations on the frame come here
-        image = cv2.cvtColor(src = frame, code = cv2.COLOR_BGR2GRAY)
+        image = cv2.cvtColor(src = video_capture.read(), code = cv2.COLOR_BGR2GRAY)
 
         now = datetime.now()
         datetimes.append(now)
