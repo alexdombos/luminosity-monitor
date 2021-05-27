@@ -87,17 +87,15 @@ def main():
 
         time_difference = now - earliest_time
         time_window = 10 * 60
-        time_reset = 60 * 60
+        time_max = 60 * 60
         time_delta = timedelta(seconds = time_window)
-        if time_difference.total_seconds() > time_reset:
-            if button_show_only_last_10_minutes.activated is True:
-                axes.set_xlim(left = now - time_delta)
-            for button_click_processor in button_click_processors:
-                button_click_processor.deactivate()
-            earliest_time = now
-            datetimes = []
-            y_values = []
-        elif time_difference.total_seconds() > time_window:
+        if time_difference.total_seconds() > time_max:
+            datetimes, y_values = list(zip(*[(x, y) for (x, y) in zip(datetimes, y_values)
+                                             if (now - x).total_seconds() <= time_max]))
+            datetimes = list(datetimes)
+            y_values = list(y_values)
+            earliest_time = datetimes[0]
+        if time_difference.total_seconds() > time_window:
             if button_show_all_times.activated is True:
                 axes.set_xlim(left = datetimes[0] - 0.05 * (datetimes[-1] - datetimes[0]))
             elif button_show_only_last_10_minutes.activated is True:
